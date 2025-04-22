@@ -129,6 +129,9 @@ class Runtime(FileEditRuntimeMixin):
 
         self.status_callback = status_callback
         self.attach_to_existing = attach_to_existing
+        
+        # Flag to track if setup.sh is currently running
+        self._setup_script_running = False
 
         self.config = copy.deepcopy(config)
         atexit.register(self.close)
@@ -402,15 +405,31 @@ class Runtime(FileEditRuntimeMixin):
         if isinstance(read_obs, ErrorObservation):
             return
 
+        # Set flag to indicate setup.sh is running
+        self._setup_script_running = True
+        self.log('info', 'Running setup.sh script')
+
         if self.status_callback:
             self.status_callback(
                 'info', 'STATUS$SETTING_UP_WORKSPACE', 'Setting up workspace...'
             )
 
-        action = CmdRunAction(f'chmod +x {setup_script} && source {setup_script}')
+        # Create a special action that is marked as static to bypass the setup script check
+        action = CmdRunAction(
+            command=f'chmod +x {setup_script} && source {setup_script}',
+            is_static=True
+        )
+        
+        # Run the setup script
         obs = self.run_action(action)
+        
+        # Clear the flag after setup.sh completes
+        self._setup_script_running = False
+        
         if isinstance(obs, CmdOutputObservation) and obs.exit_code != 0:
             self.log('error', f'Setup script failed: {obs.content}')
+        else:
+            self.log('info', 'Setup script completed successfully')
 
     def get_microagents_from_selected_repo(
         self, selected_repository: str | None
@@ -491,11 +510,26 @@ class Runtime(FileEditRuntimeMixin):
 
         return loaded_microagents
 
+    def is_setup_script_running(self) -> bool:
+        """Check if setup.sh is currently running."""
+        return self._setup_script_running
+        
     def run_action(self, action: Action) -> Observation:
         """Run an action and return the resulting observation.
         If the action is not runnable in any runtime, a NullObservation is returned.
         If the action is not supported by the current runtime, an ErrorObservation is returned.
         """
+        # Check if setup.sh is running and this is a command from the agent (not from setup.sh itself)
+        if (
+            isinstance(action, CmdRunAction)
+            and not getattr(action, 'is_static', False)  # Not an internal command
+            and self._setup_script_running  # Setup script is running
+        ):
+            self.log('warning', 'Attempted to run command while setup.sh is running')
+            return ErrorObservation(
+                'Cannot execute commands until setup.sh has completed. Please wait.'
+            )
+            
         if not action.runnable:
             if isinstance(action, AgentThinkAction):
                 return AgentThinkObservation('Your thought has been logged.')

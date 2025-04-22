@@ -307,6 +307,12 @@ class ActionExecutionClient(Runtime):
             return obs
 
     def run(self, action: CmdRunAction) -> Observation:
+        # Check if setup.sh is running and this is not a static command
+        if self._setup_script_running and not getattr(action, 'is_static', False):
+            self.log('warning', 'Attempted to run command while setup.sh is running')
+            return ErrorObservation(
+                'Cannot execute commands until setup.sh has completed. Please wait.'
+            )
         return self.send_action_for_execution(action)
 
     def run_ipython(self, action: IPythonRunCellAction) -> Observation:
