@@ -722,7 +722,8 @@ fi
 
                 # Clean up the org repo directory
                 if org_repo_dir.exists():
-                    shutil.rmtree(org_repo_dir)
+                    action = CmdRunAction(f'rm -rf {org_repo_dir}')
+                    self.run_action(action)
                     org_repo_dir = None  # Mark as already removed
             else:
                 self.log(
