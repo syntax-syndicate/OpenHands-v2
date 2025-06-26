@@ -6,7 +6,7 @@ import sys
 import traceback
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Literal, Mapping, TextIO
+from typing import Any, Literal, Mapping, MutableMapping, TextIO
 
 import litellm
 from pythonjsonlogger.json import JsonFormatter
@@ -261,6 +261,7 @@ class SensitiveDataFilter(logging.Filter):
             'modal_api_token_secret',
             'llm_api_key',
             'sandbox_env_github_token',
+            'runloop_api_key',
             'daytona_api_key',
         ]
 
@@ -304,7 +305,7 @@ def get_file_handler(
     return file_handler
 
 
-def json_formatter():
+def json_formatter() -> JsonFormatter:
     return JsonFormatter(
         '{message}{levelname}',
         style='{',
@@ -385,10 +386,22 @@ if LOG_TO_FILE:
     )  # default log to project root
     openhands_logger.debug(f'Logging to file in: {LOG_DIR}')
 
-# Exclude LiteLLM from logging output
+# Exclude LiteLLM from logging output as it can leak keys
 logging.getLogger('LiteLLM').disabled = True
 logging.getLogger('LiteLLM Router').disabled = True
 logging.getLogger('LiteLLM Proxy').disabled = True
+
+# Exclude loquacious loggers
+LOQUACIOUS_LOGGERS = [
+    'engineio',
+    'engineio.server',
+    'socketio',
+    'socketio.client',
+    'socketio.server',
+]
+
+for logger_name in LOQUACIOUS_LOGGERS:
+    logging.getLogger(logger_name).setLevel('WARNING')
 
 
 class LlmFileHandler(logging.FileHandler):
@@ -471,11 +484,15 @@ llm_response_logger = _setup_llm_logger('response', current_log_level)
 class OpenHandsLoggerAdapter(logging.LoggerAdapter):
     extra: dict
 
-    def __init__(self, logger=openhands_logger, extra=None):
+    def __init__(
+        self, logger: logging.Logger = openhands_logger, extra: dict | None = None
+    ) -> None:
         self.logger = logger
         self.extra = extra or {}
 
-    def process(self, msg, kwargs):
+    def process(
+        self, msg: str, kwargs: MutableMapping[str, Any]
+    ) -> tuple[str, MutableMapping[str, Any]]:
         """
         If 'extra' is supplied in kwargs, merge it with the adapters 'extra' dict
         Starting in Python 3.13, LoggerAdapter's merge_extra option will do this.

@@ -374,6 +374,8 @@ async def test_unsafe_bash_command(temp_dir: str):
                             'is_input': False,
                             'hidden': False,
                             'confirmation_state': ActionConfirmationStatus.CONFIRMED,
+                            'is_static': False,
+                            'cwd': None,
                         },
                     ),
                 ),
@@ -411,6 +413,7 @@ async def test_unsafe_bash_command(temp_dir: str):
                 browser_actions='goto("http://localhost:3000")',
                 thought='browsing to localhost',
                 browsergym_send_msg_to_user='browsergym',
+                return_axtree=False,
             ),
             [
                 Message(
@@ -428,6 +431,7 @@ async def test_unsafe_bash_command(temp_dir: str):
                         arguments={
                             'browser_actions': 'goto("http://localhost:3000")',
                             'browsergym_send_msg_to_user': 'browsergym',
+                            'return_axtree': False,
                         },
                     ),
                 ),
@@ -435,7 +439,9 @@ async def test_unsafe_bash_command(temp_dir: str):
         ),
         (  # Test BrowseURLAction
             BrowseURLAction(
-                url='http://localhost:3000', thought='browsing to localhost'
+                url='http://localhost:3000',
+                thought='browsing to localhost',
+                return_axtree=False,
             ),
             [
                 Message(
@@ -450,7 +456,10 @@ async def test_unsafe_bash_command(temp_dir: str):
                     type='function',
                     function=Function(
                         name=ActionType.BROWSE,
-                        arguments={'url': 'http://localhost:3000'},
+                        arguments={
+                            'url': 'http://localhost:3000',
+                            'return_axtree': False,
+                        },
                     ),
                 ),
             ],

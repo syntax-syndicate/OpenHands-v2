@@ -3,11 +3,17 @@ import shutil
 
 import pytest
 
+from openhands.controller.state.control_flags import IterationControlFlag
 from openhands.controller.state.state import State
 from openhands.core.message import Message, TextContent
 from openhands.events.observation.agent import MicroagentKnowledge
-from openhands.microagent import BaseMicroAgent
-from openhands.utils.prompt import PromptManager, RepositoryInfo, RuntimeInfo
+from openhands.microagent import BaseMicroagent
+from openhands.utils.prompt import (
+    ConversationInstructions,
+    PromptManager,
+    RepositoryInfo,
+    RuntimeInfo,
+)
 
 
 @pytest.fixture
@@ -52,7 +58,10 @@ At the user's request, repository {{ repository_info.repo_name }} has been clone
 
     # Test building additional info
     additional_info = manager.build_workspace_context(
-        repository_info=repo_info, runtime_info=None, repo_instructions=''
+        repository_info=repo_info,
+        runtime_info=None,
+        repo_instructions='',
+        conversation_instructions=None,
     )
     assert '<REPOSITORY_INFO>' in additional_info
     assert (
@@ -72,7 +81,7 @@ def test_prompt_manager_file_not_found(prompt_dir):
     """Test PromptManager behavior when a template file is not found."""
     # Test with a non-existent template
     with pytest.raises(FileNotFoundError):
-        BaseMicroAgent.load(
+        BaseMicroagent.load(
             os.path.join(prompt_dir, 'micro', 'non_existent_microagent.md')
         )
 
@@ -147,39 +156,17 @@ This is information from agent 2
     assert result.strip() == ''
 
 
-def test_add_examples_to_initial_message(prompt_dir):
-    """Test adding example messages to an initial message."""
-    # Create a user_prompt.j2 template file
-    with open(os.path.join(prompt_dir, 'user_prompt.j2'), 'w') as f:
-        f.write('This is an example user message')
-
-    # Initialize the PromptManager
-    manager = PromptManager(prompt_dir=prompt_dir)
-
-    # Create a message
-    message = Message(role='user', content=[TextContent(text='Original content')])
-
-    # Add examples to the message
-    manager.add_examples_to_initial_message(message)
-
-    # Check that the example was added at the beginning
-    assert len(message.content) == 2
-    assert message.content[0].text == 'This is an example user message'
-    assert message.content[1].text == 'Original content'
-
-    # Clean up
-    os.remove(os.path.join(prompt_dir, 'user_prompt.j2'))
-
-
 def test_add_turns_left_reminder(prompt_dir):
     """Test adding turns left reminder to messages."""
     # Initialize the PromptManager
     manager = PromptManager(prompt_dir=prompt_dir)
 
     # Create a State object with specific iteration values
-    state = State()
-    state.iteration = 3
-    state.max_iterations = 10
+    state = State(
+        iteration_flag=IterationControlFlag(
+            current_value=3, max_value=10, limit_increase_amount=10
+        )
+    )
 
     # Create a list of messages with a user message
     user_message = Message(role='user', content=[TextContent(text='User content')])
@@ -229,7 +216,14 @@ each of which has a corresponding port:
 {% if runtime_info.additional_agent_instructions %}
 {{ runtime_info.additional_agent_instructions }}
 {% endif %}
+
+Today's date is {{ runtime_info.date }}
 </RUNTIME_INFORMATION>
+{% if conversation_instructions.content %}
+<CONVERSATION_INSTRUCTIONS>
+{{ conversation_instructions.content }}
+</CONVERSATION_INSTRUCTIONS>
+{% endif %}
 {% endif %}
 """)
 
@@ -245,11 +239,14 @@ each of which has a corresponding port:
     )
     repo_instructions = 'This repository contains important code.'
 
+    conversation_instructions = ConversationInstructions(content='additional context')
+
     # Build additional info
     result = manager.build_workspace_context(
         repository_info=repo_info,
         runtime_info=runtime_info,
         repo_instructions=repo_instructions,
+        conversation_instructions=conversation_instructions,
     )
 
     # Check that all information is included
@@ -261,7 +258,8 @@ each of which has a corresponding port:
     assert '<RUNTIME_INFORMATION>' in result
     assert 'example.com (port 8080)' in result
     assert 'You know everything about this runtime.' in result
-    assert "Today's date is 02/12/1232 (UTC)."
+    assert "Today's date is 02/12/1232" in result
+    assert 'additional context' in result
 
     # Clean up
     os.remove(os.path.join(prompt_dir, 'additional_info.j2'))
@@ -271,3 +269,39 @@ def test_prompt_manager_initialization_error():
     """Test that PromptManager raises an error if the prompt directory is not set."""
     with pytest.raises(ValueError, match='Prompt directory is not set'):
         PromptManager(None)
+
+
+def test_prompt_manager_custom_system_prompt_filename(prompt_dir):
+    """Test that PromptManager can use a custom system prompt filename."""
+    # Create a custom system prompt file
+    with open(os.path.join(prompt_dir, 'custom_system.j2'), 'w') as f:
+        f.write('Custom system prompt: {{ custom_var }}')
+
+    # Create default system prompt
+    with open(os.path.join(prompt_dir, 'system_prompt.j2'), 'w') as f:
+        f.write('Default system prompt')
+
+    # Test with custom system prompt filename
+    manager = PromptManager(
+        prompt_dir=prompt_dir, system_prompt_filename='custom_system.j2'
+    )
+    system_msg = manager.get_system_message()
+    assert 'Custom system prompt:' in system_msg
+
+    # Test without custom system prompt filename (should use default)
+    manager_default = PromptManager(prompt_dir=prompt_dir)
+    default_msg = manager_default.get_system_message()
+    assert 'Default system prompt' in default_msg
+
+    # Clean up
+    os.remove(os.path.join(prompt_dir, 'custom_system.j2'))
+    os.remove(os.path.join(prompt_dir, 'system_prompt.j2'))
+
+
+def test_prompt_manager_custom_system_prompt_filename_not_found(prompt_dir):
+    """Test that PromptManager raises an error if custom system prompt file is not found."""
+    with pytest.raises(
+        FileNotFoundError,
+        match=r'System prompt file "non_existent\.j2" not found at .*/non_existent\.j2\. Please ensure the file exists in the prompt directory:',
+    ):
+        PromptManager(prompt_dir=prompt_dir, system_prompt_filename='non_existent.j2')

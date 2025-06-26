@@ -1,17 +1,24 @@
 import React from "react";
 import { useSelector } from "react-redux";
 import posthog from "posthog-js";
+import { useTranslation } from "react-i18next";
 import { formatTimeDelta } from "#/utils/format-time-delta";
 import { ConversationRepoLink } from "./conversation-repo-link";
-import {
-  ProjectStatus,
-  ConversationStateIndicator,
-} from "./conversation-state-indicator";
+import { ConversationStateIndicator } from "./conversation-state-indicator";
 import { EllipsisButton } from "./ellipsis-button";
 import { ConversationCardContextMenu } from "./conversation-card-context-menu";
+import { SystemMessageModal } from "./system-message-modal";
+import { MicroagentsModal } from "./microagents-modal";
+import { BudgetDisplay } from "./budget-display";
 import { cn } from "#/utils/utils";
 import { BaseModal } from "../../shared/modals/base-modal/base-modal";
 import { RootState } from "#/store";
+import { I18nKey } from "#/i18n/declaration";
+import { transformVSCodeUrl } from "#/utils/vscode-url-helper";
+import OpenHands from "#/api/open-hands";
+import { useWsClient } from "#/context/ws-client-provider";
+import { isSystemMessage } from "#/types/core/guards";
+import { ConversationStatus } from "#/types/conversation-status";
 
 interface ConversationCardProps {
   onClick?: () => void;
@@ -23,7 +30,7 @@ interface ConversationCardProps {
   selectedRepository: string | null;
   lastUpdatedAt: string; // ISO 8601
   createdAt?: string; // ISO 8601
-  status?: ProjectStatus;
+  conversationStatus?: ConversationStatus;
   variant?: "compact" | "default";
   conversationId?: string; // Optional conversation ID for VS Code URL
 }
@@ -42,14 +49,21 @@ export function ConversationCard({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   lastUpdatedAt,
   createdAt,
-  status = "STOPPED",
+  conversationStatus = "STOPPED",
   variant = "default",
   conversationId,
 }: ConversationCardProps) {
+  const { t } = useTranslation();
+  const { parsedEvents } = useWsClient();
   const [contextMenuVisible, setContextMenuVisible] = React.useState(false);
   const [titleMode, setTitleMode] = React.useState<"view" | "edit">("view");
   const [metricsModalVisible, setMetricsModalVisible] = React.useState(false);
+  const [systemModalVisible, setSystemModalVisible] = React.useState(false);
+  const [microagentsModalVisible, setMicroagentsModalVisible] =
+    React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const systemMessage = parsedEvents.find(isSystemMessage);
 
   // Subscribe to metrics data from Redux store
   const metrics = useSelector((state: RootState) => state.metrics);
@@ -104,13 +118,12 @@ export function ConversationCard({
     // Fetch the VS Code URL from the API
     if (conversationId) {
       try {
-        const response = await fetch(
-          `/api/conversations/${conversationId}/vscode-url`,
-        );
-        const data = await response.json();
-
+        const data = await OpenHands.getVSCodeUrl(conversationId);
         if (data.vscode_url) {
-          window.open(data.vscode_url, "_blank");
+          const transformedUrl = transformVSCodeUrl(data.vscode_url);
+          if (transformedUrl) {
+            window.open(transformedUrl, "_blank");
+          }
         }
         // VS Code URL not available
       } catch (error) {
@@ -124,6 +137,18 @@ export function ConversationCard({
   const handleDisplayCost = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
     setMetricsModalVisible(true);
+  };
+
+  const handleShowAgentTools = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    setSystemModalVisible(true);
+  };
+
+  const handleShowMicroagents = (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    event.stopPropagation();
+    setMicroagentsModalVisible(true);
   };
 
   React.useEffect(() => {
@@ -148,7 +173,7 @@ export function ConversationCard({
         className={cn(
           "h-[100px] w-full px-[18px] py-4 border-b border-neutral-600 cursor-pointer",
           variant === "compact" &&
-            "h-auto w-fit rounded-xl border border-[#525252]",
+            "md:w-fit h-auto rounded-xl border border-[#525252]",
         )}
       >
         <div className="flex items-center justify-between w-full">
@@ -180,7 +205,9 @@ export function ConversationCard({
           </div>
 
           <div className="flex items-center">
-            <ConversationStateIndicator status={status} />
+            <ConversationStateIndicator
+              conversationStatus={conversationStatus}
+            />
             {hasContextMenu && (
               <div className="pl-2">
                 <EllipsisButton
@@ -204,6 +231,16 @@ export function ConversationCard({
                       : undefined
                   }
                   onDisplayCost={showOptions ? handleDisplayCost : undefined}
+                  onShowAgentTools={
+                    showOptions && systemMessage
+                      ? handleShowAgentTools
+                      : undefined
+                  }
+                  onShowMicroagents={
+                    showOptions && conversationId
+                      ? handleShowMicroagents
+                      : undefined
+                  }
                   position={variant === "compact" ? "top" : "bottom"}
                 />
               )}
@@ -220,14 +257,18 @@ export function ConversationCard({
             <ConversationRepoLink selectedRepository={selectedRepository} />
           )}
           <p className="text-xs text-neutral-400">
-            <span>Created </span>
+            <span>{t(I18nKey.CONVERSATION$CREATED)} </span>
             <time>
-              {formatTimeDelta(new Date(createdAt || lastUpdatedAt))} ago
+              {formatTimeDelta(new Date(createdAt || lastUpdatedAt))}{" "}
+              {t(I18nKey.CONVERSATION$AGO)}
             </time>
             {showUpdateTime && (
               <>
-                <span>, updated </span>
-                <time>{formatTimeDelta(new Date(lastUpdatedAt))} ago</time>
+                <span>{t(I18nKey.CONVERSATION$UPDATED)} </span>
+                <time>
+                  {formatTimeDelta(new Date(lastUpdatedAt))}{" "}
+                  {t(I18nKey.CONVERSATION$AGO)}
+                </time>
               </>
             )}
           </p>
@@ -237,7 +278,7 @@ export function ConversationCard({
       <BaseModal
         isOpen={metricsModalVisible}
         onOpenChange={setMetricsModalVisible}
-        title="Metrics Information"
+        title={t(I18nKey.CONVERSATION$METRICS_INFO)}
         testID="metrics-modal"
       >
         <div className="space-y-4">
@@ -245,20 +286,24 @@ export function ConversationCard({
             <div className="rounded-md p-3">
               <div className="grid gap-3">
                 {metrics?.cost !== null && (
-                  <div className="flex justify-between items-center border-b border-neutral-700 pb-2">
+                  <div className="flex justify-between items-center pb-2">
                     <span className="text-lg font-semibold">
-                      Total Cost (USD):
+                      {t(I18nKey.CONVERSATION$TOTAL_COST)}
                     </span>
                     <span className="font-semibold">
                       ${metrics.cost.toFixed(4)}
                     </span>
                   </div>
                 )}
+                <BudgetDisplay
+                  cost={metrics?.cost ?? null}
+                  maxBudgetPerTask={metrics?.max_budget_per_task ?? null}
+                />
 
                 {metrics?.usage !== null && (
                   <>
                     <div className="flex justify-between items-center pb-2">
-                      <span>Total Input Tokens:</span>
+                      <span>{t(I18nKey.CONVERSATION$INPUT)}</span>
                       <span className="font-semibold">
                         {metrics.usage.prompt_tokens.toLocaleString()}
                       </span>
@@ -276,20 +321,50 @@ export function ConversationCard({
                     </div>
 
                     <div className="flex justify-between items-center border-b border-neutral-700 pb-2">
-                      <span>Total Output Tokens:</span>
+                      <span>{t(I18nKey.CONVERSATION$OUTPUT)}</span>
                       <span className="font-semibold">
                         {metrics.usage.completion_tokens.toLocaleString()}
                       </span>
                     </div>
 
-                    <div className="flex justify-between items-center pt-1">
-                      <span className="font-semibold">Total Tokens:</span>
+                    <div className="flex justify-between items-center border-b border-neutral-700 pb-2">
+                      <span className="font-semibold">
+                        {t(I18nKey.CONVERSATION$TOTAL)}
+                      </span>
                       <span className="font-bold">
                         {(
                           metrics.usage.prompt_tokens +
                           metrics.usage.completion_tokens
                         ).toLocaleString()}
                       </span>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">
+                          {t(I18nKey.CONVERSATION$CONTEXT_WINDOW)}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-500 transition-all duration-300"
+                          style={{
+                            width: `${Math.min(100, (metrics.usage.per_turn_token / metrics.usage.context_window) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <span className="text-xs text-neutral-400">
+                          {metrics.usage.per_turn_token.toLocaleString()} /{" "}
+                          {metrics.usage.context_window.toLocaleString()} (
+                          {(
+                            (metrics.usage.per_turn_token /
+                              metrics.usage.context_window) *
+                            100
+                          ).toFixed(2)}
+                          % {t(I18nKey.CONVERSATION$USED)})
+                        </span>
+                      </div>
                     </div>
                   </>
                 )}
@@ -299,11 +374,26 @@ export function ConversationCard({
 
           {!metrics?.cost && !metrics?.usage && (
             <div className="rounded-md p-4 text-center">
-              <p className="text-neutral-400">No metrics data available</p>
+              <p className="text-neutral-400">
+                {t(I18nKey.CONVERSATION$NO_METRICS)}
+              </p>
             </div>
           )}
         </div>
       </BaseModal>
+
+      <SystemMessageModal
+        isOpen={systemModalVisible}
+        onClose={() => setSystemModalVisible(false)}
+        systemMessage={systemMessage ? systemMessage.args : null}
+      />
+
+      {microagentsModalVisible && (
+        <MicroagentsModal
+          onClose={() => setMicroagentsModalVisible(false)}
+          conversationId={conversationId}
+        />
+      )}
     </>
   );
 }

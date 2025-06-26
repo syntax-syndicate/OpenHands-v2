@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from openhands.core.config import AppConfig, LLMConfig
+from openhands.core.config import LLMConfig, OpenHandsConfig
 from openhands.core.logger import OpenHandsLoggerAdapter, json_log_handler
 from openhands.core.logger import openhands_logger as openhands_logger
 
@@ -84,11 +84,11 @@ def test_llm_config_attributes_masking(test_handler):
 
 def test_app_config_attributes_masking(test_handler):
     logger, stream = test_handler
-    app_config = AppConfig(e2b_api_key='e2b-xyz789')
+    app_config = OpenHandsConfig(search_api_key='search-xyz789')
     logger.info(f'App Config: {app_config}')
     log_output = stream.getvalue()
     assert 'github_token' not in log_output
-    assert 'e2b-xyz789' not in log_output
+    assert 'search-xyz789' not in log_output
     assert 'ghp_abcdefghijklmnopqrstuvwxyz' not in log_output
 
 

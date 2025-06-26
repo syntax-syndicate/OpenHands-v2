@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from typing import Literal, cast
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from openhands.core import logger
 from openhands.core.config.llm_config import LLMConfig
@@ -11,7 +13,7 @@ class NoOpCondenserConfig(BaseModel):
 
     type: Literal['noop'] = Field('noop')
 
-    model_config = {'extra': 'forbid'}
+    model_config = ConfigDict(extra='forbid')
 
 
 class ObservationMaskingCondenserConfig(BaseModel):
@@ -24,7 +26,7 @@ class ObservationMaskingCondenserConfig(BaseModel):
         ge=1,
     )
 
-    model_config = {'extra': 'forbid'}
+    model_config = ConfigDict(extra='forbid')
 
 
 class BrowserOutputCondenserConfig(BaseModel):
@@ -53,7 +55,7 @@ class RecentEventsCondenserConfig(BaseModel):
         default=100, description='Maximum number of events to keep.', ge=1
     )
 
-    model_config = {'extra': 'forbid'}
+    model_config = ConfigDict(extra='forbid')
 
 
 class LLMSummarizingCondenserConfig(BaseModel):
@@ -75,8 +77,12 @@ class LLMSummarizingCondenserConfig(BaseModel):
         description='Maximum size of the condensed history before triggering forgetting.',
         ge=2,
     )
+    max_event_length: int = Field(
+        default=10_000,
+        description='Maximum length of the event representations to be passed to the LLM.',
+    )
 
-    model_config = {'extra': 'forbid'}
+    model_config = ConfigDict(extra='forbid')
 
 
 class AmortizedForgettingCondenserConfig(BaseModel):
@@ -96,7 +102,7 @@ class AmortizedForgettingCondenserConfig(BaseModel):
         ge=0,
     )
 
-    model_config = {'extra': 'forbid'}
+    model_config = ConfigDict(extra='forbid')
 
 
 class LLMAttentionCondenserConfig(BaseModel):
@@ -119,7 +125,49 @@ class LLMAttentionCondenserConfig(BaseModel):
         ge=0,
     )
 
-    model_config = {'extra': 'forbid'}
+    model_config = ConfigDict(extra='forbid')
+
+
+class StructuredSummaryCondenserConfig(BaseModel):
+    """Configuration for StructuredSummaryCondenser instances."""
+
+    type: Literal['structured'] = Field('structured')
+    llm_config: LLMConfig = Field(
+        ..., description='Configuration for the LLM to use for condensing.'
+    )
+
+    # at least one event by default, because the best guess is that it's the user task
+    keep_first: int = Field(
+        default=1,
+        description='Number of initial events to always keep in history.',
+        ge=0,
+    )
+    max_size: int = Field(
+        default=100,
+        description='Maximum size of the condensed history before triggering forgetting.',
+        ge=2,
+    )
+    max_event_length: int = Field(
+        default=10_000,
+        description='Maximum length of the event representations to be passed to the LLM.',
+    )
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class CondenserPipelineConfig(BaseModel):
+    """Configuration for the CondenserPipeline.
+
+    Not currently supported by the TOML or ENV_VAR configuration strategies.
+    """
+
+    type: Literal['pipeline'] = Field('pipeline')
+    condensers: list[CondenserConfig] = Field(
+        default_factory=list,
+        description='List of condenser configurations to be used in the pipeline.',
+    )
+
+    model_config = ConfigDict(extra='forbid')
 
 
 class TokenAwareCondenserConfig(BaseModel):
@@ -156,6 +204,8 @@ CondenserConfig = (
     | AmortizedForgettingCondenserConfig
     | LLMAttentionCondenserConfig
     | TokenAwareCondenserConfig
+    | StructuredSummaryCondenserConfig
+    | CondenserPipelineConfig
 )
 
 
@@ -259,6 +309,7 @@ def create_condenser_config(condenser_type: str, data: dict) -> CondenserConfig:
         'amortized': AmortizedForgettingCondenserConfig,
         'llm_attention': LLMAttentionCondenserConfig,
         'token_aware': TokenAwareCondenserConfig,
+        'structured': StructuredSummaryCondenserConfig,
     }
 
     if condenser_type not in condenser_classes:
