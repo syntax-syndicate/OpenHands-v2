@@ -99,6 +99,39 @@ or run it on tagged issues with [a github action](https://docs.all-hands.dev/usa
 
 Visit [Running OpenHands](https://docs.all-hands.dev/usage/installation) for more information and setup instructions.
 
+### Minimal Installation
+
+If you only need the OpenHands CLI, you can install a minimal version with:
+
+```bash
+pip install openhands-ai
+```
+
+For additional functionality, you can install optional dependencies:
+
+```bash
+# For local runtime support
+pip install "openhands-ai[runtime]"
+
+# For web browsing support
+pip install "openhands-ai[browser]"
+
+# For file processing support (PDF, PPTX, DOCX)
+pip install "openhands-ai[file-processing]"
+
+# For Jupyter notebook integration
+pip install "openhands-ai[jupyter]"
+
+# For third-party integrations
+pip install "openhands-ai[integrations]"
+
+# For third-party runtimes (e2b, modal, etc.)
+pip install "openhands-ai[third-party-runtimes]"
+
+# For all optional dependencies
+pip install "openhands-ai[all]"
+```
+
 If you want to modify the OpenHands source code, check out [Development.md](https://github.com/All-Hands-AI/OpenHands/blob/main/Development.md).
 
 Having issues? The [Troubleshooting Guide](https://docs.all-hands.dev/usage/troubleshooting) can help.
