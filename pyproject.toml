@@ -109,45 +109,7 @@ daytona = { version = "0.21.1", optional = true }
 poetry = { version = "^2.1.2", optional = true }
 
 [tool.poetry.extras]
-# Define extras for different use cases
-runtime = [
-  "docker",
-  "fastapi",
-  "uvicorn",
-  "python-multipart",
-  "tornado",
-  "python-socketio",
-  "sse-starlette",
-  "pexpect",
-  "fastmcp",
-]
-browser = [ "browsergym-core", "html2text" ]
-file-processing = [ "PyPDF2", "python-pptx", "pylatexenc", "python-docx" ]
-jupyter = [ "ipywidgets", "qtconsole", "jupyter_kernel_gateway" ]
-integrations = [
-  "google-generativeai",
-  "google-api-python-client",
-  "google-auth-httplib2",
-  "google-auth-oauthlib",
-  "redis",
-  "minio",
-  "stripe",
-  "google-cloud-aiplatform",
-  "anthropic",
-  "boto3",
-  "kubernetes",
-  "pygithub",
-  "openhands-aci",
-  "pythonnet",
-  "memory-profiler",
-  "numpy",
-  "json-repair",
-  "joblib",
-]
-third-party-runtimes = [ "e2b", "modal", "runloop-api-client", "daytona" ]
-build = [ "poetry" ]
-
-# Combined extras for convenience
+# Just one extra for all optional dependencies
 all = [
   "docker",
   "fastapi",
