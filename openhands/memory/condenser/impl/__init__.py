@@ -22,11 +22,11 @@ from openhands.memory.condenser.impl.pipeline import CondenserPipeline
 from openhands.memory.condenser.impl.recent_events_condenser import (
     RecentEventsCondenser,
 )
-from openhands.memory.condenser.impl.token_aware_condenser import (
-    TokenAwareCondenser,
-)
 from openhands.memory.condenser.impl.structured_summary_condenser import (
     StructuredSummaryCondenser,
+)
+from openhands.memory.condenser.impl.token_aware_condenser import (
+    TokenAwareCondenser,
 )
 
 __all__ = [

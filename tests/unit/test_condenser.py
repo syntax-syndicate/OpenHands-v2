@@ -14,13 +14,13 @@ from openhands.core.config.condenser_config import (
     NoOpCondenserConfig,
     ObservationMaskingCondenserConfig,
     RecentEventsCondenserConfig,
-    TokenAwareCondenserConfig,
     StructuredSummaryCondenserConfig,
+    TokenAwareCondenserConfig,
 )
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.message import Message, TextContent
-from openhands.events.action.agent import CondensationAction
 from openhands.core.schema.action import ActionType
+from openhands.events.action.agent import CondensationAction
 from openhands.events.event import Event, EventSource
 from openhands.events.observation import BrowserOutputObservation
 from openhands.events.observation.agent import AgentCondensationObservation
@@ -42,8 +42,8 @@ from openhands.memory.condenser.impl import (
     NoOpCondenser,
     ObservationMaskingCondenser,
     RecentEventsCondenser,
-    TokenAwareCondenser,
     StructuredSummaryCondenser,
+    TokenAwareCondenser,
 )
 from openhands.memory.condenser.impl.pipeline import CondenserPipeline
 
@@ -649,6 +649,7 @@ def test_token_aware_condenser_from_config():
     assert condenser.llm.config.api_key.get_secret_value() == 'test_key'
     assert condenser.threshold == 0.85
     assert condenser.keep_first == 2
+
 
 def test_structured_summary_condenser_from_config():
     """Test that StructuredSummaryCondenser objects can be made from config."""
