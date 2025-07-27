@@ -5,7 +5,7 @@ import platform
 import sys
 from ast import literal_eval
 from types import UnionType
-from typing import MutableMapping, get_args, get_origin
+from typing import MutableMapping, get_args, get_origin, get_type_hints
 from uuid import uuid4
 
 import toml
@@ -154,8 +154,22 @@ def load_from_toml(cfg: OpenHandsConfig, toml_file: str = 'config.toml') -> None
         core_config = toml_config['core']
 
     # Process core section if present
+    cfg_type_hints = get_type_hints(cfg.__class__)
     for key, value in core_config.items():
         if hasattr(cfg, key):
+            # Get expected type of the attribute
+            expected_type = cfg_type_hints.get(key, None)
+
+            # Check if expected_type is a Union that includes SecretStr and value is str, e.g. search_api_key
+            if expected_type:
+                origin = get_origin(expected_type)
+                args = get_args(expected_type)
+
+                if origin is UnionType and SecretStr in args and isinstance(value, str):
+                    value = SecretStr(value)
+                elif expected_type is SecretStr and isinstance(value, str):
+                    value = SecretStr(value)
+
             setattr(cfg, key, value)
         else:
             logger.openhands_logger.warning(
@@ -323,7 +337,7 @@ def finalize_config(cfg: OpenHandsConfig) -> None:
     if cfg.workspace_base is not None or cfg.workspace_mount_path is not None:
         logger.openhands_logger.warning(
             'DEPRECATED: The WORKSPACE_BASE and WORKSPACE_MOUNT_PATH environment variables are deprecated. '
-            "Please use RUNTIME_MOUNT instead, e.g. 'RUNTIME_MOUNT=/my/host/dir:/workspace:rw'"
+            "Please use SANDBOX_VOLUMES instead, e.g. 'SANDBOX_VOLUMES=/my/host/dir:/workspace:rw'"
         )
     if cfg.sandbox.volumes is not None:
         # Split by commas to handle multiple mounts
@@ -758,6 +772,12 @@ def get_parser() -> argparse.ArgumentParser:
         help='Override the default settings for CLI mode',
         type=bool,
         default=False,
+    )
+    parser.add_argument(
+        '--log-level',
+        help='Set the log level',
+        type=str,
+        default=None,
     )
     return parser
 
